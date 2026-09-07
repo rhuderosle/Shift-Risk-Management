@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
+
+# Internal-only deployment docs (kept locally, not published)
+deploy/HOSTING-REQUEST.md
+deploy/PARKED-sharepoint-option.md

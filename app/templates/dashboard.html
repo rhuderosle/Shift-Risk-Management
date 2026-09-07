@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>{{ title }}</h1>
+    <div class="meta">AI-powered shift passdown &amp; risk escalation &middot; current shift <b>{{ shift }}</b> &middot; {{ now }}</div>
+  </div>
+  <div class="meta">
+    {% if current_user and current_user != 'anonymous' %}
+    Signed in: <span class="pill">{{ current_user }}{% if not is_admin %} (read-only){% endif %}</span>
+    {% endif %}
+    Summarizer: <span class="pill">{{ generator }}</span>
+    Auto-passdown: <span class="pill">{{ cron }}</span>
+    {% for j in jobs %}<span class="pill">{{ j.id }} &rarr; {{ j.next_run[:16] }}</span>{% endfor %}
+  </div>
+</header>
+
+<div class="wrap">
+  {% if not email_enabled %}
+  <div class="notice">
+    EMAIL_ENABLED is false — generated emails are written to <code>data/outbox/</code> instead of being sent.
+    Set SMTP credentials and <code>EMAIL_ENABLED=true</code> in <code>.env</code> to enable live delivery.
+  </div>
+  {% endif %}
+
+  <div class="grid kpis">
+    <div class="card kpi">
+      <div class="label">Shift Health Index</div>
+      <div class="value">{{ agg.health }}<span class="sub"> / 100</span></div>
+      <div class="sub">avg risk score {{ agg.avg_score }}</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Open Risks</div>
+      <div class="value">{{ agg.open }}</div>
+      <div class="sub">{{ agg.total }} tracked in window</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Critical / High</div>
+      <div class="value">{{ agg.by_band.Critical }} <span class="sub">/ {{ agg.by_band.High }}</span></div>
+      <div class="sub">auto-escalated by email</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Downtime Exposure</div>
+      <div class="value">{{ agg.total_downtime_minutes | round(0) | int }}<span class="sub"> min</span></div>
+      <div class="sub">{{ agg.total_impact_units | round(0) | int }} units impacted</div>
+    </div>
+  </div>
+
+  <div class="grid cols">
+    <div>
+      <div class="card">
+        <h2>AI Executive Summary — Shift {{ shift }}</h2>
+        <ul class="summary">
+          {% for b in bullets %}<li>{{ b }}</li>{% endfor %}
+        </ul>
+        <div class="actions" style="margin-top:14px">
+          <form method="post" action="/actions/send-passdown" class="inline">
+            <select name="shift">
+              <option value="">Current shift ({{ shift }})</option>
+              {% for s in shifts %}<option value="{{ s }}">Shift {{ s }}</option>{% endfor %}
+            </select>
+            <button type="submit">Generate &amp; email passdown</button>
+          </form>
+          <form method="post" action="/actions/escalate">
+            <button type="submit" class="ghost">Run escalation scan</button>
+          </form>
+          <form method="post" action="/actions/sync-mms">
+            <button type="submit" class="ghost">Sync MMS Passdown</button>
+          </form>
+          <form method="post" action="/actions/sync-outlook">
+            <button type="submit" class="ghost">Sync Outlook</button>
+          </form>
+          <form method="post" action="/actions/sync-hdmx">
+            <button type="submit" class="ghost">Sync HDMX (USDT / hot swap / spares)</button>
+          </form>
+        </div>
+
+        <form method="post" action="/actions/save-recipients" class="inline"
+              style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label for="email_to" style="font-size:12px;color:#5b6472">Send passdown to</label>
+          <input id="email_to" name="email_to" type="text" value="{{ email_to }}"
+                 placeholder="name@intel.com, name2@intel.com"
+                 style="flex:1;min-width:280px;padding:6px 8px;border:1px solid #d5dae1;border-radius:5px">
+          <button type="submit" class="ghost">Save recipients</button>
+        </form>
+        <div style="font-size:11px;color:#8a94a6;margin-top:6px">
+          Transport: <b>{{ email_transport }}</b> ·
+          {% if email_enabled %}sending is <b>live</b>{% else %}writing to data/outbox/{% endif %}
+          {% if email_redirect_to %}
+            · <span style="color:#b3261e">TEST MODE: all mail redirected to {{ email_redirect_to }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Shift Review Focus</h2>
+        <div class="small" style="margin:-6px 0 10px">
+          LIPAS &middot; USDT by area &middot; Hot swap trend &middot; Waiting for spare
+          &middot; Conversion &middot; HDMX DT trend — quoted from the passdown, not inferred.
+        </div>
+        <ul class="summary focus">
+          {% for b in focus_bullets %}<li>{{ b }}</li>{% endfor %}
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Prioritised Risk Register</h2>
+        <div class="small" style="margin:-6px 0 10px">
+          Ordered by review agenda first, then by score.
+          {% if agg.by_focus %}
+            {% for f, c in agg.by_focus.items() %}<span class="pill focus-pill">{{ f }} {{ c }}</span>{% endfor %}
+          {% endif %}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Band</th><th>Risk</th><th>Area</th><th>Owner</th>
+              <th>Score</th><th>Status</th><th>Next action</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in risks %}
+            <tr>
+              <td><span class="badge {{ r.band }}">{{ r.band }}</span></td>
+              <td>
+                <b>{{ r.title }}</b>
+                {% for f in r.focus %}<span class="pill focus-pill">{{ f }}</span>{% endfor %}
+                {% if r.needs_review %}<span class="pill" style="border-color:#5c4a16;color:#ffd98a">needs review</span>{% endif %}
+                {% if r.description %}<div class="small">{{ r.description[:140] }}</div>{% endif %}
+                <div class="small">sev {{ r.severity }}/5 &middot; lik {{ r.likelihood }}/5 &middot;
+                  {{ r.downtime_minutes | round(0) | int }} min &middot;
+                  {% if r.external_ref %}<a href="{{ r.external_ref }}" target="_blank">src {{ r.source }}</a>
+                  {% else %}src {{ r.source }}{% endif %}</div>
+              </td>
+              <td>{{ r.area }}</td>
+              <td>{{ r.owner or '—' }}</td>
+              <td>
+                <div>{{ r.score }}</div>
+                <div class="bar"><span style="width: {{ r.score }}%; background: var(--{{ r.band | lower }})"></span></div>
+              </td>
+              <td>
+                <form method="post" action="/risks/{{ r.id }}/status" class="inline">
+                  <select name="status" onchange="this.form.submit()">
+                    {% for s in ['open', 'mitigating', 'closed'] %}
+                    <option value="{{ s }}" {% if r.status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+              </td>
+              <td class="small">{{ r.action or '—' }}</td>
+              <td>
+                <form method="post" action="/risks/{{ r.id }}/delete">
+                  <button class="danger" type="submit">✕</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="8" class="small">No risks logged yet. Add one on the right, or POST to <code>/api/ingest</code>.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Log a Risk</h2>
+        <form method="post" action="/risks/form">
+          <div class="field"><label>Title</label><input name="title" required minlength="3" placeholder="Tool 4B chamber pressure drift"></div>
+          <div class="field"><label>Description</label><textarea name="description" placeholder="What happened, current containment, dependencies"></textarea></div>
+          <div class="row2">
+            <div class="field"><label>Area</label><input name="area" value="General"></div>
+            <div class="field"><label>Owner</label><input name="owner" placeholder="Name"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Shift</label>
+              <select name="shift">{% for s in shifts %}<option value="{{ s }}" {% if s == shift %}selected{% endif %}>Shift {{ s }}</option>{% endfor %}</select>
+            </div>
+            <div class="field"><label>Status</label>
+              <select name="status"><option>open</option><option>mitigating</option><option>closed</option></select>
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Severity 1-5</label><input type="number" name="severity" min="1" max="5" value="3"></div>
+            <div class="field"><label>Likelihood 1-5</label><input type="number" name="likelihood" min="1" max="5" value="3"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Downtime (min)</label><input type="number" step="1" name="downtime_minutes" value="0"></div>
+            <div class="field"><label>Impacted units</label><input type="number" step="1" name="impact_units" value="0"></div>
+          </div>
+          <div class="field"><label>Next action</label><input name="action" placeholder="Containment / owner action"></div>
+          <button type="submit">Add risk</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Risk by Area</h2>
+        <table>
+          <tbody>
+          {% for area, count in agg.by_area.items() %}
+            <tr><td>{{ area }}</td><td style="width:60%">
+              <div class="bar"><span style="width: {{ (count / agg.total * 100) if agg.total else 0 }}%; background: var(--accent)"></span></div>
+            </td><td style="text-align:right">{{ count }}</td></tr>
+          {% else %}
+            <tr><td class="small">No data</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Generated Passdowns</h2>
+        <table>
+          <thead><tr><th>Shift</th><th>Generated</th><th>Risks</th><th>Email</th></tr></thead>
+          <tbody>
+          {% for rep in reports %}
+            <tr>
+              <td><a href="/reports/{{ rep.id }}" target="_blank">{{ rep.shift }}</a></td>
+              <td class="small">{{ rep.generated_at[:16] }}</td>
+              <td>{{ rep.risk_count }} <span class="small">({{ rep.critical_count }} crit)</span></td>
+              <td class="small">{{ rep.email_status }}</td>
+            </tr>
+          {% else %}<tr><td colspan="4" class="small">None yet</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Email Trigger Log</h2>
+        <table>
+          <thead><tr><th>When</th><th>Kind</th><th>Subject</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for e in emails %}
+            <tr>
+              <td class="small">{{ e.sent_at[:16] }}</td>
+              <td><span class="pill">{{ e.kind }}</span></td>
+              <td class="small">{{ e.subject[:70] }}</td>
+              <td class="small">{{ e.status }}</td>
+            </tr>
+          {% else %}<tr><td colspan="4" class="small">No emails triggered yet</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<button id="chatToggle" onclick="toggleChat(true)">💬 Ask the risk assistant</button>
+
+<div id="chatPanel">
+  <div id="chatHead">
+    <div>
+      <div class="t">Shift Risk Assistant</div>
+      <div class="s">Answers from the live register &middot; Shift {{ shift }}</div>
+    </div>
+    <button id="chatClose" onclick="toggleChat(false)" title="Close">&times;</button>
+  </div>
+  <div id="chatLog"></div>
+  <div id="chatChips"></div>
+  <form id="chatForm" onsubmit="return sendChat(event)">
+    <input id="chatInput" autocomplete="off" placeholder="Ask about risks, owners, downtime…">
+    <button type="submit">Send</button>
+  </form>
+</div>
+
+<script>
+// Auto-refresh every 120s, but never while the assistant is open or in use.
+setInterval(function () {
+  const panel = document.getElementById('chatPanel');
+  const input = document.getElementById('chatInput');
+  if (panel.classList.contains('open') || (input && input.value.trim())) return;
+  window.location.reload();
+}, 120000);
+
+const CHAT_HISTORY = [];
+const chatLog = document.getElementById('chatLog');
+const chatChips = document.getElementById('chatChips');
+
+function toggleChat(open) {
+  document.getElementById('chatPanel').classList.toggle('open', open);
+  document.getElementById('chatToggle').style.display = open ? 'none' : 'block';
+  if (open) {
+    document.getElementById('chatInput').focus();
+    if (!chatLog.dataset.greeted) {
+      chatLog.dataset.greeted = '1';
+      addMsg('bot', "Hi — ask me anything about the current shift risks. "
+        + "I answer only from the live register, so I won't invent anything.");
+      renderChips(["What are the critical risks?", "Give me the shift summary",
+                   "What needs review?", "Which risks have no owner?"]);
+    }
+  }
+}
+
+function addMsg(who, text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + who;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+  chatLog.appendChild(wrap);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return wrap;
+}
+
+function renderChips(items) {
+  chatChips.innerHTML = '';
+  (items || []).slice(0, 4).forEach(function (s) {
+    const c = document.createElement('span');
+    c.className = 'chip';
+    c.textContent = s;
+    c.onclick = function () { askChat(s); };
+    chatChips.appendChild(c);
+  });
+}
+
+async function askChat(text) {
+  addMsg('me', text);
+  CHAT_HISTORY.push({ role: 'user', content: text });
+  chatChips.innerHTML = '';
+  const pending = addMsg('bot', 'Thinking…');
+  pending.querySelector('.bubble').classList.add('typing');
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, history: CHAT_HISTORY.slice(-6) })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    pending.remove();
+    addMsg('bot', data.reply);
+    CHAT_HISTORY.push({ role: 'assistant', content: data.reply });
+    renderChips(data.suggestions);
+  } catch (err) {
+    pending.remove();
+    addMsg('err', 'Sorry — the assistant is unreachable (' + err.message + ').');
+  }
+}
+
+function sendChat(ev) {
+  ev.preventDefault();
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (text) { input.value = ''; askChat(text); }
+  return false;
+}
+</script>
+</body>
+</html>

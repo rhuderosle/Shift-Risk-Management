@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
 </head>
 <body>
 <header>
@@ -107,11 +107,31 @@
         <div class="small" style="margin:-6px 0 10px">
           LIPAS &middot; USDT by area &middot; Hot swap trend &middot; Waiting for spare
           &middot; Conversion &middot; HDMX DT trend &middot; HSD DT Latest —
-          quoted from the passdown/live systems, not inferred.
+          quoted from the passdown/live systems, not inferred. Attention = below
+          target, a repeated issue, or a trip/disable; No data = section not loaded yet.
         </div>
-        <ul class="summary focus">
-          {% for b in focus_bullets %}<li>{{ b }}</li>{% endfor %}
-        </ul>
+        <table class="focus-table">
+          <thead>
+            <tr><th class="topic">Topic</th><th class="status">Status</th><th>Details</th></tr>
+          </thead>
+          <tbody>
+            {% for row in focus_table %}
+            <tr>
+              <td class="topic">{{ row.group }}</td>
+              <td class="status">
+                <span class="badge {% if row.status == 'OK' %}status-ok{% elif row.status == 'Attention' %}status-attention{% else %}status-nodata{% endif %}">
+                  {{ row.status }}
+                </span>
+              </td>
+              <td>
+                <ul class="focus-detail">
+                  {% for line in row.lines %}<li data-depth="{{ line.depth }}">{{ line.text }}</li>{% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
 
       <div class="card">

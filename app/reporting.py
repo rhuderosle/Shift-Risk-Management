@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,10 @@ from . import summarizer
 from .config import settings
 from .db import execute, get_setting, query, utcnow
 from .emailer import send_email
+
+# Cache-busts /static/* URLs so browsers pick up CSS/JS changes on restart
+# instead of serving a stale cached copy indefinitely.
+ASSET_VERSION = str(int(time.time()))
 
 log = logging.getLogger(__name__)
 
@@ -125,12 +130,14 @@ def dashboard_context() -> dict[str, Any]:
     bullets, generator = summarizer.summarize(shift, agg)
     return {
         "title": settings.app_title,
+        "asset_version": ASSET_VERSION,
         "shift": shift,
         "now": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "risks": risks,
         "agg": agg,
         "bullets": bullets,
         "focus_bullets": summarizer.focus_bullets(),
+        "focus_table": summarizer.focus_table(),
         "focus_order": re_.FOCUS_ORDER,
         "generator": generator,
         "band_colors": summarizer.BAND_COLORS,

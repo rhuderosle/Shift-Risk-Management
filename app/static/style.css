@@ -48,6 +48,9 @@ header .meta { color: var(--muted); font-size: 12px; }
 .badge.High { background: var(--high); }
 .badge.Medium { background: var(--medium); }
 .badge.Low { background: var(--low); }
+.badge.status-ok { background: var(--low); color: #10151f; }
+.badge.status-attention { background: var(--critical); color: #fff; }
+.badge.status-nodata { background: var(--panel2); color: var(--muted); border: 1px solid var(--line); }
 .pill {
   display: inline-block; padding: 2px 8px; border-radius: 10px;
   background: var(--panel2); color: var(--muted); font-size: 11px; border: 1px solid var(--line);
@@ -72,6 +75,16 @@ ul.summary li { margin-bottom: 7px; }
 .focus-pill { border-color: #2b4b6f; color: #9ec9ff; margin-left: 4px; }
 ul.focus li::marker { color: #9ec9ff; }
 ul.focus li { border-left: 2px solid #2b4b6f; padding-left: 8px; margin-left: -8px; }
+
+table.focus-table td { vertical-align: top; }
+table.focus-table td.topic { width: 150px; font-weight: 600; white-space: nowrap; }
+table.focus-table td.status { width: 100px; }
+table.focus-table ul.focus-detail { margin: 0; padding-left: 16px; line-height: 1.55; }
+table.focus-table ul.focus-detail li { margin-bottom: 4px; }
+table.focus-table ul.focus-detail li[data-depth="0"] { list-style: none; margin-left: -16px; font-weight: 500; }
+table.focus-table ul.focus-detail li[data-depth="1"] { list-style: none; margin-left: -4px; color: var(--text); }
+table.focus-table ul.focus-detail li[data-depth="2"] { color: var(--muted); }
+table.focus-table tr:first-child td { border-top: 1px solid var(--line); }
 
 input, select, textarea, button {
   font-family: inherit; font-size: 13px; border-radius: 6px;

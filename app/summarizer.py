@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
@@ -412,6 +413,82 @@ def focus_bullets() -> list[str]:
     out.extend(_hsdes_dt_latest())
 
     return out
+
+
+# Maps a bullet's leading label (before " — ") to the group it belongs to in
+# the dashboard table, and the display order of groups. Longer/more specific
+# prefixes are matched before shorter ones (e.g. "HSD DT Latest" before a bare
+# "HSD"), so this list order matters.
+FOCUS_GROUPS: list[tuple[str, str]] = [
+    ("LIPAS", "LIPAS Attainment"),
+    ("VPO miss", "VPO"),
+    ("USDT by tool", "USDT"),
+    ("USDT trend", "USDT"),
+    ("USDT by area", "USDT"),
+    ("USDT", "USDT"),
+    ("Hot swap trend", "Hot Swap & Spares"),
+    ("Hot swap by product", "Hot Swap & Spares"),
+    ("Waiting for spare", "Hot Swap & Spares"),
+    ("Conversion", "Conversion"),
+    ("HDMX DT trend", "HDMX DT & Chiller"),
+    ("Chiller status", "HDMX DT & Chiller"),
+    ("HSD DT Latest", "HSD DT Latest (repeat issues)"),
+]
+GROUP_ORDER = [
+    "LIPAS Attainment", "VPO", "USDT", "Hot Swap & Spares",
+    "Conversion", "HDMX DT & Chiller", "HSD DT Latest (repeat issues)",
+]
+
+# Keyword signals used to colour-code each group's status badge. Checked in
+# order; the first list whose keyword is found anywhere in the group's text
+# (case-insensitive) wins, so put the most urgent signals first.
+_ATTENTION_KEYWORDS = (
+    "critical", "repeated issue", "below target", "help needed", "miss",
+    "trip", "tripped", "disable", "escalat",
+)
+_NO_DATA_KEYWORDS = (
+    "not configured", "unavailable", "no rows", "not stated",
+)
+_NO_DATA_RE = re.compile(r"\bno\b.{0,40}\b(loaded|section|table)\b", re.I)
+
+
+def focus_table() -> list[dict[str, Any]]:
+    """Group ``focus_bullets()`` into a table-friendly structure.
+
+    Each row is one agenda topic (LIPAS, VPO, USDT, ...) with a status badge
+    (OK / Attention / No data) and its lines nested by indent depth, so the
+    dashboard can render the same data the passdown text uses as an actual
+    table instead of one long flat bullet list.
+    """
+    bullets = focus_bullets()
+
+    groups: dict[str, list[dict[str, Any]]] = {name: [] for name in GROUP_ORDER}
+    current = GROUP_ORDER[0]
+    for line in bullets:
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+        if indent == 0:
+            label = stripped.split(" — ", 1)[0].strip()
+            for prefix, group in FOCUS_GROUPS:
+                if label.startswith(prefix):
+                    current = group
+                    break
+        groups[current].append({"text": stripped, "depth": indent // 2})
+
+    rows = []
+    for name in GROUP_ORDER:
+        lines = groups[name]
+        if not lines:
+            continue
+        blob = " ".join(l["text"] for l in lines).lower()
+        if any(k in blob for k in _NO_DATA_KEYWORDS) or _NO_DATA_RE.search(blob):
+            status = "No data"
+        elif any(k in blob for k in _ATTENTION_KEYWORDS):
+            status = "Attention"
+        else:
+            status = "OK"
+        rows.append({"group": name, "status": status, "lines": lines})
+    return rows
 
 
 def summarize(shift: str, agg: dict[str, Any]) -> tuple[list[str], str]:

@@ -85,6 +85,21 @@ class Settings(BaseSettings):
     # How many recent work weeks of utilisation archive to read for trends.
     hdmx_trend_weeks: int = 8
 
+    # ---- HSD-ES "HSD DT Latest" query (repeat tool-down follow-up) ------
+    # Authenticated with the caller's Windows identity, same pattern as MMS.
+    # Set HSDES_QUERY_ID to your saved query's numeric id (from the HSD-ES
+    # community query URL). Left blank by default so this stays opt-in.
+    hsdes_enabled: bool = True
+    hsdes_base_url: str = "https://hsdes-api.intel.com"
+    hsdes_query_id: str = ""
+    hsdes_timeout_seconds: int = 60
+    # A tool/cell is called out as a "repeat offender" once it has at least
+    # this many DT records in the query result.
+    hsdes_min_repeats: int = 2
+    # A PowerShell subprocess round-trip costs ~5s, so the query result is
+    # cached for this long rather than re-fetched on every dashboard render.
+    hsdes_cache_seconds: int = 300
+
     llm_provider: str = "none"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"

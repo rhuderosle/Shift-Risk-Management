@@ -237,6 +237,40 @@ def action_sync_hdmx():
     return RedirectResponse("/", status_code=303)
 
 
+@app.get("/api/hsdes/focus")
+def api_hsdes_focus():
+    """HSD-ES DT Latest, grouped by repeat tool/cell offenders."""
+    from .connectors import hsdes
+
+    try:
+        return hsdes.dt_latest_report()
+    except hsdes.HSDESUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@app.post("/api/hsdes/sync")
+def api_hsdes_sync():
+    from .connectors import hsdes
+
+    try:
+        return hsdes.sync()
+    except hsdes.HSDESUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, f"HSD-ES read failed: {exc}") from exc
+
+
+@app.post("/actions/sync-hsdes")
+def action_sync_hsdes():
+    from .connectors import hsdes
+
+    try:
+        hsdes.sync()
+    except Exception as exc:  # noqa: BLE001 - surface on the dashboard, don't 500
+        logging.getLogger(__name__).error("HSD-ES sync failed: %s", exc)
+    return RedirectResponse("/", status_code=303)
+
+
 @app.post("/actions/sync-outlook")
 def action_sync_outlook():
     allowed, why = auth.outlook_read_allowed()

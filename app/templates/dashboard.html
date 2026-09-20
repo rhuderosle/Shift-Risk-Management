@@ -80,6 +80,9 @@
           <form method="post" action="/actions/sync-hdmx">
             <button type="submit" class="ghost">Sync HDMX (USDT / hot swap / spares)</button>
           </form>
+          <form method="post" action="/actions/sync-hsdes">
+            <button type="submit" class="ghost">Sync HSD-ES (DT Latest)</button>
+          </form>
         </div>
 
         <form method="post" action="/actions/save-recipients" class="inline"
@@ -103,7 +106,8 @@
         <h2>Shift Review Focus</h2>
         <div class="small" style="margin:-6px 0 10px">
           LIPAS &middot; USDT by area &middot; Hot swap trend &middot; Waiting for spare
-          &middot; Conversion &middot; HDMX DT trend — quoted from the passdown, not inferred.
+          &middot; Conversion &middot; HDMX DT trend &middot; HSD DT Latest —
+          quoted from the passdown/live systems, not inferred.
         </div>
         <ul class="summary focus">
           {% for b in focus_bullets %}<li>{{ b }}</li>{% endfor %}

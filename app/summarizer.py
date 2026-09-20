@@ -198,6 +198,39 @@ def _hdmx_usdt() -> list[str]:
     return lines
 
 
+def _hsdes_dt_latest() -> list[str]:
+    """Repeat-offender tool/cell lines from the HSD-ES DT Latest query, or []."""
+    from .config import settings
+
+    if not settings.hsdes_enabled or not settings.hsdes_query_id:
+        return []
+    try:
+        from .connectors import hsdes
+        data = hsdes.dt_latest_report()
+        if not data["available"]:
+            return []
+    except Exception as exc:  # noqa: BLE001 - a query outage must not break the passdown
+        log.warning("HSD-ES DT Latest unavailable: %s", exc)
+        return []
+
+    offenders = data["repeat_offenders"]
+    if not offenders:
+        return [f"HSD DT Latest — {data['total_records']} record(s), no tool repeated "
+                f"{data['min_repeats']}+ times."]
+
+    lines = [
+        f"HSD DT Latest — {len(offenders)} tool(s) with {data['min_repeats']}+ repeat DT "
+        f"tickets out of {data['total_records']} record(s), needs follow-up:"
+    ]
+    for o in offenders[:6]:
+        prog = f", {'/'.join(o['programs'])}" if o["programs"] else ""
+        lines.append(
+            f"  Tool {o['tool']} — {o['count']}x ({o['open_count']} open{prog}); "
+            f"latest {o['latest_open_date'][:10]}; " + "; ".join(o["titles"][:3])
+        )
+    return lines
+
+
 def _hdmx_hot_swap() -> list[str]:
     """Hot swap and waiting-for-spare lines from HDMX, or [] if unavailable."""
     from .config import settings
@@ -237,9 +270,10 @@ def focus_bullets() -> list[str]:
     """Headline lines for the standing shift-review agenda.
 
     Order follows how the review is run: LIPAS attainment, then USDT by area,
-    hot swap trend, items waiting for spare, conversion, and HDMX DT trend.
-    Every figure is quoted from the passdown; topics with no data say so rather
-    than being silently dropped, so a missing section is visible at handover.
+    hot swap trend, items waiting for spare, conversion, HDMX DT trend, and
+    HSD-ES DT Latest repeat-offender follow-up. Every figure is quoted from the
+    passdown/live systems; topics with no data say so rather than being
+    silently dropped, so a missing section is visible at handover.
     """
     from . import metrics
 
@@ -349,6 +383,9 @@ def focus_bullets() -> list[str]:
                 f"{c['unit']}: {c['detail'][:130]}" for c in dt["chillers"][:3]))
     else:
         out.append("HDMX DT trend — no DT/chiller section loaded.")
+
+    # --- HSD-ES DT Latest (repeat tool/cell follow-up) ---
+    out.extend(_hsdes_dt_latest())
 
     return out
 

@@ -215,6 +215,25 @@ Severity and likelihood are inferred with the same keyword heuristics as the MMS
 every imported mail is flagged `needs_review`. Re-syncing is idempotent: risks are keyed on
 `external_ref = outlook:thread:<key>`, so an existing risk is updated rather than duplicated.
 
+## HSD-ES connector ("HSD DT Latest")
+
+A read-only connector reads a saved HSD-ES community query and surfaces tools/cells that have
+opened **repeat** downtime tickets, so they can be called out for follow-up instead of getting
+lost among one-off entries. Click **Sync HSD-ES (DT Latest)** on the dashboard, or
+`POST /api/hsdes/sync`.
+
+- Set `HSDES_QUERY_ID` to your saved query's numeric id (from the HSD-ES query URL/execution
+  link). Left blank by default so this connector stays opt-in.
+- Authenticated with your Windows identity the same way as the MMS connector (`Invoke-WebRequest
+  -UseDefaultCredentials` via PowerShell) — plain username/password isn't supported by the API.
+- The query itself has no dedicated tool/cell column, so the identifier is extracted from the
+  free-text title (e.g. `"HDMX 7168 TOOL DOWN"` → `7168`) and records are grouped by it. A
+  tool/cell is called out once it has `HSDES_MIN_REPEATS` (default 2) or more tickets.
+- Each PowerShell round-trip costs a few seconds, so the result is cached for
+  `HSDES_CACHE_SECONDS` (default 300s) rather than re-fetched on every dashboard render. The
+  **Sync HSD-ES** button always forces a fresh fetch.
+- Nothing is written to the local database — this is read-only, same as HDMX.
+
 ## Shift review focus
 
 The review runs against a fixed agenda, so the app is built around it:
@@ -226,7 +245,9 @@ The review runs against a fixed agenda, so the app is built around it:
 | Hot swap trend | `Last 24hrs Collaterals Update` — grouped by work week |
 | Waiting for spare | same section, the "Waiting for Spare" table |
 | Conversion | `HDMX CONVERSION STATUS` — per-module rate vs. target |
-| HDMX DT trend | `HDMX DT TREND AND CHILLER STATUS` — product issues and chiller units |
+| HDMX DT trend | `HDMX DT TREND AND CHILLER STATUS` — PG12 product issues and chiller units |
+| USDT (live) | HDMX utilisation CSVs, scoped to PG12 — overall %, top offending tools, trend |
+| HSD DT Latest | HSD-ES saved query — tools/cells with 2+ repeat DT tickets, needs follow-up |
 
 This drives three places at once:
 

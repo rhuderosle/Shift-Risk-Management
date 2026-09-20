@@ -29,6 +29,20 @@ Copy-Item .env.example .env      # then edit .env
 
 Open <http://127.0.0.1:8086/>. `run.py` honours `BIND_HOST`/`BIND_PORT` from `.env`.
 
+### Starting it without a terminal
+
+`launcher.py` is a double-click starter: it opens the dashboard in your browser if it's
+already running, otherwise starts it detached (so closing the launcher does not stop the
+server) and then opens the browser. Build it once into a standalone `.exe`:
+
+```powershell
+.\deploy\build-launcher.ps1
+```
+
+This produces `StartShiftRisk.exe` in the project root — not committed to git, since it's a
+compiled binary and this repo is public. Rebuild it after pulling changes to `launcher.py`.
+Pin it to the taskbar or make a desktop shortcut for one-click access.
+
 > **Sharing this with other Intel users?** The app runs unauthenticated by default and is
 > only safe on `127.0.0.1`. See [deploy/README.md](./deploy/README.md) — it also covers two
 > things that *break* rather than merely weaken on a server: Outlook COM email, and the

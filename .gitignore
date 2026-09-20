@@ -7,3 +7,7 @@ data/
 # Internal-only deployment docs (kept locally, not published)
 deploy/HOSTING-REQUEST.md
 deploy/PARKED-sharepoint-option.md
+
+# Built launcher binary - rebuild locally with build-launcher.ps1
+StartShiftRisk.exe
+build/

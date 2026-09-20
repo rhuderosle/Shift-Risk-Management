@@ -209,6 +209,27 @@ def _problem_summary(description_html: str, max_len: int = 220) -> str:
     return after.strip()[:max_len]
 
 
+# Submitters prefix the problem text with a work-week/shift/lot stamp that
+# differs every time even when the underlying alarm is identical (e.g.
+# "WW38.4N_ Alarm: ..." vs "WW 38.3N _ Alarm: ..."), so a literal string
+# compare treats every occurrence as a distinct issue. Stripping that stamp
+# lets the same recurring alarm be recognised as the same issue.
+LEADING_STAMP_RE = re.compile(r"^WW\s*\d+(?:\.\d+)?[A-Za-z]?[_\s-]*", re.I)
+
+
+def _issue_signature(problem: str) -> str:
+    t = LEADING_STAMP_RE.sub("", problem or "").strip()
+    # A short lot/run code (e.g. "P637166CR_6248_") sometimes sits between the
+    # stamp and the actual "Alarm:"/"Encounter" marker - drop it too so only
+    # the alarm signature itself is compared.
+    for marker in ("Alarm:", "Encounter"):
+        idx = t.find(marker)
+        if 0 < idx <= 40:
+            t = t[idx:]
+            break
+    return WS_RE.sub(" ", t).strip().lower()
+
+
 def _tool_key(row: dict[str, Any], article: dict[str, Any] | None) -> str | None:
     if article:
         cell = (article.get("services_sys_val.support.tool_top_cell_id") or "").strip()
@@ -265,6 +286,27 @@ def dt_latest_report(min_repeats: int | None = None, use_cache: bool = True) -> 
         if len(recs) < min_repeats:
             continue
         recs_sorted = sorted(recs, key=lambda r: r.get("open_date") or "", reverse=True)
+
+        # Same asset opening several tickets can be one issue recurring, or
+        # several unrelated issues - only the former is a true "repeated
+        # issue". Count identical problem text (normalized) to tell them
+        # apart, so the follow-up highlights *which* issue is the repeat.
+        norm_counts: dict[str, int] = {}
+        for r in recs_sorted:
+            key = _issue_signature(r["problem"])
+            if key:
+                norm_counts[key] = norm_counts.get(key, 0) + 1
+        repeated_key = max(norm_counts, key=norm_counts.get) if norm_counts else None
+        repeated_count = norm_counts.get(repeated_key, 0) if repeated_key else 0
+        is_actual_repeat = repeated_count >= min_repeats
+        repeated_problem = None
+        if is_actual_repeat:
+            repeated_problem = next(
+                (r["problem"] for r in recs_sorted
+                 if _issue_signature(r["problem"]) == repeated_key),
+                None,
+            )
+
         offenders.append({
             "tool": tool,
             "count": len(recs),
@@ -279,9 +321,19 @@ def dt_latest_report(min_repeats: int | None = None, use_cache: bool = True) -> 
                     "priority": r.get("priority", ""),
                     "open_date": r.get("open_date", ""),
                     "submitted_by": r.get("submitted_by", ""),
+                    "is_repeated_issue": (
+                        is_actual_repeat
+                        and _issue_signature(r["problem"]) == repeated_key
+                    ),
                 }
                 for r in recs_sorted
             ],
+            # Set only when the *same* problem text recurred >= min_repeats
+            # times on this asset - i.e. one issue kept coming back, as
+            # opposed to several different issues happening to hit the same
+            # tool/cell.
+            "repeated_issue": repeated_problem,
+            "repeated_issue_count": repeated_count if is_actual_repeat else 0,
             "priorities": sorted({r.get("priority", "") for r in recs_sorted if r.get("priority")}),
             "programs": sorted({r.get("program", "") for r in recs_sorted if r.get("program")}),
             "latest_open_date": recs_sorted[0].get("open_date", "") if recs_sorted else "",

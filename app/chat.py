@@ -319,13 +319,18 @@ def _answer_hsdes_dt(m: str) -> str:
             mod = f" [{o['module']}]" if o["module"] else ""
             out.append(f"{o['tool']}{mod} — {o['count']}x, {o['open_count']} open, "
                        f"latest {o['latest_open_date'][:10]}:")
+            if o["repeated_issue"]:
+                out.append(f"  🔁 REPEATED ISSUE ({o['repeated_issue_count']}x): {o['repeated_issue']}")
+            else:
+                out.append("  (no single issue repeated — each ticket below is a different problem)")
             seen: set[str] = set()
             for issue in o["issues"]:
                 key = issue["problem"].lower()
                 if key in seen:
                     continue
                 seen.add(key)
-                out.append(f"  [{issue['open_date'][:10]}, {issue['status']}] {issue['problem']}")
+                flag = " (repeated)" if issue["is_repeated_issue"] else ""
+                out.append(f"  [{issue['open_date'][:10]}, {issue['status']}] {issue['problem']}{flag}")
         return "\n".join(out)
 
     if not offenders:
@@ -338,6 +343,10 @@ def _answer_hsdes_dt(m: str) -> str:
         mod = f" [{o['module']}]" if o["module"] else ""
         out.append(f"{o['tool']}{mod} — {o['count']}x ({o['open_count']} open), "
                    f"latest {o['latest_open_date'][:10]}:")
+        if o["repeated_issue"]:
+            out.append(f"  🔁 REPEATED ISSUE ({o['repeated_issue_count']}x): {o['repeated_issue']}")
+        else:
+            out.append("  (no single issue repeated — each ticket below is a different problem)")
         seen: set[str] = set()
         shown = 0
         for issue in o["issues"]:
@@ -345,7 +354,8 @@ def _answer_hsdes_dt(m: str) -> str:
             if key in seen:
                 continue
             seen.add(key)
-            out.append(f"  [{issue['open_date'][:10]}] {issue['problem']}")
+            flag = " (repeated)" if issue["is_repeated_issue"] else ""
+            out.append(f"  [{issue['open_date'][:10]}] {issue['problem']}{flag}")
             shown += 1
             if shown >= 3:
                 break

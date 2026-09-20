@@ -229,6 +229,12 @@ def _hsdes_dt_latest() -> list[str]:
             f"  {o['tool']}{mod} — {o['count']}x ({o['open_count']} open{prog}); "
             f"latest {o['latest_open_date'][:10]}"
         )
+        if o["repeated_issue"]:
+            lines.append(
+                f"    🔁 REPEATED ISSUE ({o['repeated_issue_count']}x): {o['repeated_issue']}"
+            )
+        else:
+            lines.append("    (no single issue repeated — each ticket below is a different problem)")
         # Show each ticket's actual problem, not just its repeated title —
         # de-duplicate identical problem text so genuinely-distinct repeat
         # issues on the same asset are still each visible.
@@ -239,8 +245,9 @@ def _hsdes_dt_latest() -> list[str]:
             if key in seen:
                 continue
             seen.add(key)
+            flag = " (repeated)" if issue["is_repeated_issue"] else ""
             lines.append(
-                f"    • [{issue['open_date'][:10]}] {issue['problem']}"
+                f"    • [{issue['open_date'][:10]}] {issue['problem']}{flag}"
             )
             shown += 1
             if shown >= 3:

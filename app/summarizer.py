@@ -168,6 +168,19 @@ def _hdmx_usdt() -> list[str]:
     ]
 
     try:
+        by_tool = hdmx.usdt(group_by="Tool", site=metrics.FOCUS_AREA)
+        worst_tools = [a for a in by_tool.get("areas", []) if a["usdt_pct"]][:6]
+        if worst_tools:
+            lines.append(
+                f"USDT by tool ({metrics.FOCUS_AREA}) — " + "; ".join(
+                    f"{a['area']} {a['usdt_pct']}% ({a['down_hours']}h)"
+                    for a in worst_tools
+                )
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("HDMX USDT by tool unavailable: %s", exc)
+
+    try:
         from .connectors import hdmx as _h
         trend = _h.usdt_trend(site=metrics.FOCUS_AREA)
         pts = trend.get("points") or []

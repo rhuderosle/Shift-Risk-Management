@@ -560,7 +560,7 @@ def answer(message: str, history: list[dict[str, str]] | None = None) -> dict[st
                 "engine": "rules", "suggestions": SUGGESTIONS}
 
     shift = re_.current_shift()
-    risks = re_.fetch_risks(include_closed=False)
+    risks = re_.for_rollup(re_.fetch_risks(include_closed=False))
     agg = re_.aggregate(risks)
 
     llm_reply = _llm_answer(message, _build_context(risks, agg, shift), history or [])

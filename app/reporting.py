@@ -25,7 +25,7 @@ def build_report(shift: str | None = None, now: datetime | None = None) -> dict[
     if not risks:
         # Fall back to all currently-open risks so a passdown is never empty of context.
         risks = re_.fetch_risks(include_closed=False)
-    agg = re_.aggregate(risks)
+    agg = re_.aggregate(re_.for_rollup(risks))
 
     bullets, generator = summarizer.summarize(shift, agg)
     html_body = summarizer.render_html(shift, agg, bullets, start, end, generator)
@@ -79,6 +79,7 @@ def send_passdown(shift: str | None = None, recipients: list[str] | None = None,
 def scan_and_escalate(actor: str = "scheduler") -> dict[str, Any]:
     """Immediately email any newly-detected critical risk that hasn't been escalated yet."""
     rows = [re_.enrich(r) for r in query("SELECT * FROM risks WHERE status != 'closed' AND escalated_at IS NULL")]
+    rows = re_.for_rollup(rows)
     critical = [r for r in rows if r["band"] == "Critical"]
     if not critical:
         return {"escalated": 0, "status": "none"}
@@ -120,7 +121,7 @@ def dashboard_context() -> dict[str, Any]:
     shift = re_.current_shift(now)
     risks = re_.fetch_risks(include_closed=True)
     active = [r for r in risks if r["status"] != "closed"]
-    agg = re_.aggregate(active)
+    agg = re_.aggregate(re_.for_rollup(active))
     bullets, generator = summarizer.summarize(shift, agg)
     return {
         "title": settings.app_title,

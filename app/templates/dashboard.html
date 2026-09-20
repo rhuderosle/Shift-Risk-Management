@@ -118,6 +118,12 @@
             {% for f, c in agg.by_focus.items() %}<span class="pill focus-pill">{{ f }} {{ c }}</span>{% endfor %}
           {% endif %}
         </div>
+        <div class="small" style="margin:-4px 0 10px;color:#8a94a6">
+          Outlook-sourced rows (labelled <code>src Outlook</code> below) are listed here for
+          audit but excluded from the KPI cards, health index and executive summary above —
+          mail is mostly notification noise and can name individuals, so it isn't counted or
+          quoted in anything that gets distributed.
+        </div>
         <table>
           <thead>
             <tr>

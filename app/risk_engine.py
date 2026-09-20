@@ -14,6 +14,24 @@ SHIFTS: dict[str, tuple[int, int]] = {"1": (7, 12), "2": (19, 12), "3": (7, 12),
 
 BAND_ORDER = ["Critical", "High", "Medium", "Low"]
 
+# Sources excluded from every rollup - KPI cards, health index, area/band
+# counts, the executive summary and escalation - but never from the raw
+# register table, which still lists and labels every row for audit.
+#
+# Outlook mail is (a) mostly automated notification noise (Power BI refresh
+# failures, AD password reminders, security alerts) rather than genuine shift
+# risk, and (b) frequently names individuals, which auth.outlook_read_allowed()
+# already treats as unsafe to surface beyond a single operator. Counting it
+# toward shift health, or quoting it in a distributed passdown/escalation
+# email, would undermine both concerns.
+ROLLUP_EXCLUDED_SOURCES = {"outlook"}
+
+
+def for_rollup(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filter out risks whose source should not count toward any aggregate."""
+    return [r for r in risks
+            if (r.get("source") or "").strip().lower() not in ROLLUP_EXCLUDED_SOURCES]
+
 
 def risk_score(severity: int, likelihood: int, downtime_minutes: float = 0.0,
                impact_units: float = 0.0, status: str = "open") -> float:

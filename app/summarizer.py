@@ -224,10 +224,27 @@ def _hsdes_dt_latest() -> list[str]:
     ]
     for o in offenders[:6]:
         prog = f", {'/'.join(o['programs'])}" if o["programs"] else ""
+        mod = f" [{o['module']}]" if o["module"] else ""
         lines.append(
-            f"  Tool {o['tool']} — {o['count']}x ({o['open_count']} open{prog}); "
-            f"latest {o['latest_open_date'][:10]}; " + "; ".join(o["titles"][:3])
+            f"  {o['tool']}{mod} — {o['count']}x ({o['open_count']} open{prog}); "
+            f"latest {o['latest_open_date'][:10]}"
         )
+        # Show each ticket's actual problem, not just its repeated title —
+        # de-duplicate identical problem text so genuinely-distinct repeat
+        # issues on the same asset are still each visible.
+        seen: set[str] = set()
+        shown = 0
+        for issue in o["issues"]:
+            key = issue["problem"].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(
+                f"    • [{issue['open_date'][:10]}] {issue['problem']}"
+            )
+            shown += 1
+            if shown >= 3:
+                break
     return lines
 
 

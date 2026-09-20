@@ -292,6 +292,66 @@ def _answer_focus() -> str:
     return "Shift review focus:\n" + _bullets(focus_bullets())
 
 
+def _answer_hsdes_dt(m: str) -> str:
+    from .config import settings
+
+    if not settings.hsdes_enabled or not settings.hsdes_query_id:
+        return "HSD DT Latest is not configured (HSDES_QUERY_ID is unset)."
+    try:
+        from .connectors import hsdes
+        data = hsdes.dt_latest_report()
+    except Exception as exc:  # noqa: BLE001 - a query outage must not break chat
+        return f"HSD DT Latest is unavailable right now ({exc})."
+    if not data["available"]:
+        return "HSD DT Latest returned no rows — check VPN/permissions/query id."
+
+    offenders = data["repeat_offenders"]
+
+    # "what is the issue for tool 2677" / "hsd dt for 2677" — look up one asset.
+    tool_match = re.search(r"(\d{3,5})", m)
+    if tool_match:
+        needle = tool_match.group(1)
+        hits = [o for o in offenders if needle in o["tool"]]
+        if not hits:
+            return f"No repeat HSD DT tickets found for tool/cell '{needle}'."
+        out = []
+        for o in hits:
+            mod = f" [{o['module']}]" if o["module"] else ""
+            out.append(f"{o['tool']}{mod} — {o['count']}x, {o['open_count']} open, "
+                       f"latest {o['latest_open_date'][:10]}:")
+            seen: set[str] = set()
+            for issue in o["issues"]:
+                key = issue["problem"].lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(f"  [{issue['open_date'][:10]}, {issue['status']}] {issue['problem']}")
+        return "\n".join(out)
+
+    if not offenders:
+        return (f"HSD DT Latest — {data['total_records']} record(s), no tool/cell repeated "
+                f"{data['min_repeats']}+ times.")
+
+    out = [f"HSD DT Latest — {len(offenders)} tool(s)/cell(s) with {data['min_repeats']}+ "
+           f"repeat DT tickets out of {data['total_records']} record(s):"]
+    for o in offenders[:6]:
+        mod = f" [{o['module']}]" if o["module"] else ""
+        out.append(f"{o['tool']}{mod} — {o['count']}x ({o['open_count']} open), "
+                   f"latest {o['latest_open_date'][:10]}:")
+        seen: set[str] = set()
+        shown = 0
+        for issue in o["issues"]:
+            key = issue["problem"].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(f"  [{issue['open_date'][:10]}] {issue['problem']}")
+            shown += 1
+            if shown >= 3:
+                break
+    return "\n".join(out)
+
+
 # ----------------------------------------------------------------- intents
 def _intent_answer(msg: str, risks: list[dict[str, Any]], agg: dict[str, Any],
                    shift: str) -> str | None:
@@ -330,6 +390,8 @@ def _intent_answer(msg: str, risks: list[dict[str, Any]], agg: dict[str, Any],
         metric_parts.append(_answer_hdmx_dt())
     if re.search(r"\b(utz|utilization|utilisation)\b", m):
         metric_parts.append(_answer_utz())
+    if re.search(r"\bhsd\b.*\bdt\b|\bhsd[\s-]*es\b|\bdt\s*latest\b", m):
+        metric_parts.append(_answer_hsdes_dt(m))
     if metric_parts:
         return "\n\n".join(metric_parts)
 

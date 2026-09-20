@@ -236,12 +236,14 @@ def _util_file(week: str | None = None) -> str:
     return _p(UTIL_DIR_REL, UTIL_LATEST)
 
 
-def usdt(week: str | None = None, group_by: str = "Site") -> dict[str, Any]:
+def usdt(week: str | None = None, group_by: str = "Site", site: str | None = None) -> dict[str, Any]:
     """Unscheduled downtime from the utilisation monitor.
 
     USDT% = DOWN / Total. ``group_by`` defaults to ``Site`` because
     PARENT_DEPT_NAME is blank on roughly 60% of rows and would silently drop
-    most of the fleet from the breakdown.
+    most of the fleet from the breakdown. Pass ``site`` (e.g. ``"PG12"``) to
+    restrict the overall figures and breakdown to that Site only, rather than
+    the whole fleet.
     """
     path = _util_file(week)
     try:
@@ -251,6 +253,8 @@ def usdt(week: str | None = None, group_by: str = "Site") -> dict[str, Any]:
 
     if group_by not in (rows[0].keys() if rows else ()):
         group_by = "Site"
+    if site:
+        rows = [r for r in rows if (r.get("Site") or "").strip().upper() == site.upper()]
 
     down = total = prod = sdt = 0.0
     groups: dict[str, dict[str, float]] = {}
@@ -296,6 +300,7 @@ def usdt(week: str | None = None, group_by: str = "Site") -> dict[str, Any]:
         },
         "areas": areas,
         "grouped_by": group_by,
+        "site": site or "",
         "unassigned_rows": blank_group,
         "rows": len(rows),
         "week": week or "latest",
@@ -316,13 +321,13 @@ def available_weeks() -> list[str]:
     return sorted(weeks)
 
 
-def usdt_trend(weeks: int | None = None) -> dict[str, Any]:
+def usdt_trend(weeks: int | None = None, site: str | None = None) -> dict[str, Any]:
     """USDT% per work week, for trend rather than a single snapshot."""
     weeks = weeks or settings.hdmx_trend_weeks
     picked = available_weeks()[-weeks:]
     points = []
     for w in picked:
-        r = usdt(week=w)
+        r = usdt(week=w, site=site)
         if r["available"]:
             points.append({"week": w, "usdt_pct": r["overall"]["usdt_pct"]})
     return {"available": bool(points), "points": points}

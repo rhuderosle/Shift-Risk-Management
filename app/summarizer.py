@@ -141,18 +141,19 @@ FOCUS_TITLE = "Shift Review Focus"
 
 
 def _hdmx_usdt() -> list[str]:
-    """USDT lines from the HDMX utilisation CSVs, or [] if unavailable.
+    """PG12 USDT lines from the HDMX utilisation CSVs, or [] if unavailable.
 
     Returns [] rather than an error string so the caller can fall back to the
     MMS-parsed figures instead of printing a gap.
     """
     from .config import settings
+    from . import metrics
 
     if not settings.hdmx_enabled:
         return []
     try:
         from .connectors import hdmx
-        data = hdmx.usdt()
+        data = hdmx.usdt(site=metrics.FOCUS_AREA)
         if not data["available"]:
             return []
     except Exception as exc:  # noqa: BLE001 - a share outage must not break the passdown
@@ -161,26 +162,21 @@ def _hdmx_usdt() -> list[str]:
 
     o = data["overall"]
     lines = [
-        f"USDT — fleet {o['usdt_pct']}% unscheduled downtime "
+        f"USDT — {metrics.FOCUS_AREA} {o['usdt_pct']}% unscheduled downtime "
         f"(scheduled {o['sdt_pct']}%, production {o['production_pct']}%) "
         f"across {data['rows']:,} tool-shifts."
     ]
 
-    worst = [a for a in data["areas"] if a["usdt_pct"] is not None][:4]
-    if worst:
-        lines.append("USDT by area — " + "; ".join(
-            f"{a['area']} {a['usdt_pct']}% ({a['down_hours']}h, {a['tools']} tools)"
-            for a in worst))
-
     try:
         from .connectors import hdmx as _h
-        trend = _h.usdt_trend()
+        trend = _h.usdt_trend(site=metrics.FOCUS_AREA)
         pts = trend.get("points") or []
         if len(pts) >= 2:
             first, last = pts[0], pts[-1]
             direction = "up" if last["usdt_pct"] > first["usdt_pct"] else "down"
             lines.append(
-                f"USDT trend — {direction} from {first['usdt_pct']}% (WW{first['week'][-2:]}) "
+                f"USDT trend ({metrics.FOCUS_AREA}) — {direction} from "
+                f"{first['usdt_pct']}% (WW{first['week'][-2:]}) "
                 f"to {last['usdt_pct']}% (WW{last['week'][-2:]}) over {len(pts)} weeks."
             )
     except Exception as exc:  # noqa: BLE001
@@ -331,8 +327,10 @@ def focus_bullets() -> list[str]:
     dt = metrics.hdmx_dt_trend()
     if dt["available"]:
         if dt["products"]:
-            out.append("HDMX DT trend — " + "; ".join(
+            out.append(f"HDMX DT trend ({metrics.FOCUS_AREA}) — " + "; ".join(
                 f"{p['product']}: {p['detail'][:110]}" for p in dt["products"][:4]))
+        else:
+            out.append(f"HDMX DT trend — no {metrics.FOCUS_AREA} entries this shift.")
         if dt["chillers"]:
             out.append("Chiller status — " + "; ".join(
                 f"{c['unit']}: {c['detail'][:130]}" for c in dt["chillers"][:3]))

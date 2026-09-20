@@ -21,6 +21,15 @@ from .db import query
 CELL_SPLIT = re.compile(r"\s*\|\s*")
 PERCENT_RE = re.compile(r"^\d{1,3}(?:\.\d+)?%?$")
 
+# The shift review only wants HDMX DT Trend and USDT called out for PG12; other
+# areas/products still exist in the passdown but are out of scope for this
+# agenda item, so they are filtered out rather than silently mixed in.
+FOCUS_AREA = "PG12"
+
+
+def _is_focus_area(label: str) -> bool:
+    return label.strip().upper() == FOCUS_AREA
+
 
 def _rows(body: str) -> list[list[str]]:
     """Split flattened table text into rows of cells.
@@ -238,7 +247,7 @@ def _doc_like(*fragments: str) -> dict[str, Any] | None:
 
 
 def usdt_by_area() -> dict[str, Any]:
-    """USDT rate plus the per-area high-USDT handler/collateral issues."""
+    """USDT rate plus the PG12 high-USDT handler/collateral issue, if present."""
     doc = _doc_like("MEOS UPDATE")
     if not doc:
         return {"available": False, "rates": [], "areas": []}
@@ -270,8 +279,11 @@ def usdt_by_area() -> dict[str, Any]:
             detail = cells[1].strip()
             if detail.upper() in ("N/A", ""):
                 continue
+            area = re.sub(r"\s+", " ", cells[0]).strip()
+            if not _is_focus_area(area):
+                continue
             areas.append({
-                "area": re.sub(r"\s+", " ", cells[0]).strip(),
+                "area": area,
                 "detail": detail[:400],
                 "help_needed": (cells[2].strip()[:300] if len(cells) > 2
                                 and cells[2].strip().upper() != "N/A" else ""),
@@ -331,7 +343,7 @@ def conversion_status() -> dict[str, Any]:
 
 
 def hdmx_dt_trend() -> dict[str, Any]:
-    """HDMX downtime trend split into product performance and chiller status."""
+    """PG12 HDMX downtime trend: product performance and chiller status."""
     doc = _doc_like("HDMX DT TREND")
     if not doc:
         return {"available": False, "products": [], "chillers": []}
@@ -344,6 +356,7 @@ def hdmx_dt_trend() -> dict[str, Any]:
         {"product": name.strip(), "detail": re.sub(r"\s+", " ", det).strip(" -,")[:200]}
         for name, det in re.findall(
             r"([A-Z][A-Z0-9]{3,7})\s*-\s*(.*?)(?=[A-Z][A-Z0-9]{3,7}\s*-|$)", prod_part, re.S)
+        if _is_focus_area(name)
     ]
     chillers = [
         {"unit": unit.strip(), "detail": re.sub(r"\s+", " ", det).strip(" -,")[:250]}
